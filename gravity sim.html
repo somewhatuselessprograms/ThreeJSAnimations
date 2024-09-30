@@ -1,0 +1,150 @@
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="importmap">
+    {
+      "imports": {
+	"three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+	"three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+	"mindar-image-three":"https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"
+      }
+    }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js" integrity="sha512-WoO4Ih0CDOSLYafy22wZD/mcJ7k0ESLqtQsFa6zFKnEUrbtuGU+GkLtVhgt93xa2qewG5gKEC6CWlN8OaCTSVg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type = module>
+//random numbeer generator (between -1 and 1)
+import * as THREE from "three"
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+
+//Initialize THREE.JS
+let scene = new THREE.Scene();
+let camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+let renderer = new THREE.WebGLRenderer();
+let gui = new dat.GUI()
+let controls = new OrbitControls( camera, renderer.domElement );
+renderer.setSize( window.innerWidth, window.innerHeight );
+document.body.appendChild( renderer.domElement );
+//End of initialization
+let masterGroup = new THREE.Group()
+scene.add(masterGroup)
+let planets=[]
+let planetInitialPositions = [[0.0,0.0,0.0],[1.0,1.0,1.0],[2.0,2.0,2.0],[1.5,1.5,1.5],[-3.7,5,-2]]
+let planetInitialVelocitys = [[0,0,0],[3,12,1],[10,5,3],[-0.4,-0.3,-5],[0,0,0]]
+let planetVelocitys = []
+let planetStreakMeshes = [[],[],[],[],[]]
+let planetMasses = [500,20,30,500,20]
+let planetIsStationary = [true,false,false,true,false]
+let planetGeometry = new THREE.SphereGeometry(0.1,10,10)
+let planetMaterial = new THREE.MeshBasicMaterial({color:0xffffff})
+function initPlanets(){
+	planetInitialPositions.forEach((e,i)=>{
+	let group = new THREE.Group()
+	group.position.copy(new THREE.Vector3().fromArray(e))
+	//console.log(mesh.position)
+	planets.push(group)
+	let v = new THREE.Vector3(0,0,0)
+	v.fromArray(planetInitialVelocitys[i])
+	planetVelocitys.push(v)
+	})
+}
+let oldTime=new Date().getTime()
+let newTime=new Date().getTime()
+let deltaTime = 0
+function updatePlanets(){
+	planets.forEach((planet,i)=>{
+		if (planetIsStationary[i]){
+			return
+		}
+		let vel = planetVelocitys[i]
+		if (vel.length()>100){
+			vel.setLength(100)
+		} 
+		//update planet position
+		let pos1 = new THREE.Vector3(0,0,0)
+		pos1.copy(planet.position)
+		let movement = new THREE.Vector3(0,0,0)
+		movement.copy(vel)
+		movement.multiplyScalar(deltaTime)
+		pos1.add(movement)
+		//console.log(planet.position)
+		planet.position.copy(pos1)
+		let totalAcc = new THREE.Vector3(0,0,0)
+		planetMasses.forEach((mass,j)=>{
+			if (j == i){
+				return
+			}
+			let pos2 = new THREE.Vector3(0,0,0) 
+			pos2.copy(planets[j].position)
+//			console.log(pos2)
+			let dist = pos2.distanceTo(pos1)
+	//		console.log(dist)
+			let acc = new THREE.Vector3(0,0,0)
+			//set acc to a vector pointing from planet1 to 2
+			acc.copy(pos2)
+			acc.sub(pos1)
+			let invSq = 1/Math.pow(dist,2)
+			let accLength = invSq*mass
+			if (accLength > 50){
+				accLength = 50
+			}
+			acc.setLength(accLength)
+			totalAcc.add(acc) 
+		})
+		//console.log(totalAcc)
+	//	console.log("pos: "+planet.position)
+		let accMovement = new THREE.Vector3().copy(totalAcc)
+		accMovement.multiplyScalar(deltaTime)
+		vel.add(accMovement)
+		/*
+		planetVelocitys[i][0]=vel.x
+		planetVelocitys[i][1]=vel.y
+		planetVelocitys[i][2]=vel.z
+		*/
+})
+}
+function updateStreaks(){
+	planets.forEach((planet,i)=>{
+		let speed = planetVelocitys[i].length()
+		console.log(speed)
+		let clr = "hsl("+(230-speed*10).toString()+",70%,30%)"
+		let material = new THREE.MeshBasicMaterial({color:clr})
+		let mesh = new THREE.Mesh(planetGeometry,material)
+		mesh.position.copy(planet.position)
+		planetStreakMeshes[i].push(mesh)
+		if (!planetIsStationary[i]){
+		mesh.scale.multiplyScalar(3/(speed+1))
+		}
+		masterGroup.add(mesh)
+		if (planetIsStationary[i]){
+			if (planetStreakMeshes[i].length >= 2){
+				planetStreakMeshes[i][0].removeFromParent()
+				planetStreakMeshes[i].splice(0,1)
+			}
+		}
+		else{
+			if (planetStreakMeshes[i].length > 100){
+				planetStreakMeshes[i][0].removeFromParent()
+				planetStreakMeshes[i].splice(0,1)
+			}
+		}
+	})
+}
+camera.position.z = -5
+initPlanets()
+//updatePlanets()
+function animate(){
+	//console.log(camera.position)
+	oldTime = new Date().getTime()
+	controls.update() 
+	updatePlanets()
+	updateStreaks()
+	renderer.render( scene, camera );
+	newTime = new Date().getTime()
+	deltaTime = (newTime-oldTime)/1000
+	//console.log(deltaTime)
+}
+renderer.setAnimationLoop( animate );
+
+</script>
+</head>
+</html>
